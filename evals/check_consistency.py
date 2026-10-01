@@ -165,7 +165,7 @@ def main():
               "响应体提取" in texts["references/delivery.md"],
               "delivery.md 映射行缺「响应体提取」")
 
-    # 9. API_PREFIX 单一出处：定义仅在 extract_endpoints，其余只 import
+    # 10. API_PREFIX 单一出处：定义仅在 extract_endpoints，其余只 import
     defs = [f for f in ALL_FILES if f.startswith("scripts/")
             and re.search(r"API_PREFIX\s*=", read(f))
             and not f.endswith("extract_endpoints.py")]

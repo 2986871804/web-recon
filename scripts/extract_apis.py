@@ -106,6 +106,7 @@ def render(base, reconcile_fine=None):
         L.append("（因下载判定排除 %d 个文件——非 OK 不得用于提取）" % dl_excluded)
     if skipped_ext:
         L.append("（跳过非文本 %d 个——与精提同口径，无静默丢弃）" % skipped_ext)
+    L.append("对账口径：--reconcile-fine 仅覆盖 gradeA/B（gradeC 为路由/组件路径，精提通道不消费此级别，人工兜底——非盲区，是分级设计）")
     for (g, cls) in sorted(buckets.keys(), reverse=True):
         items = sorted(buckets[(g, cls)])
         L.append(f'### grade{g}::{cls} ({len(items)})')

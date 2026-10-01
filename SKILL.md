@@ -34,7 +34,7 @@ description: 授权范围内 Web 攻击面的只读测绘（全程只发 GET/HEA
 
 输入：域名或公司名（公司名先走锚定链——企业信息平台 websiteList/邮箱域名双证 → ICP 备案核验 → 主域；同主体多备案全收；股权穿透扩展默认关闭，须用户明确开启且逐次确认——技能提供归属证据，扩权决策永远留在用户手里）。见 references/phase1-assets.md §0。
 
-步骤：① 被动源收集子域名（证书透明 / 历史归档 / 被动 DNS / 测绘引擎——查询平台不触达目标，不向目标发包）→ ② DNS 解析验证 + 通配符检测 → ③ HTTP 存活探测。
+步骤：① 被动源收集子域名（证书透明 / 历史归档 / 被动 DNS / 测绘引擎——查询平台不触达目标，不向目标发包）→ ② DNS 解析验证 + 通配符检测 → ③ HTTP 存活探测（②③用 `scripts/phase1_probe.py`，预算守卫内建）。
 
 阶段规则：主动动作只限 DNS 查询与存活探测（DNS 查询逐条发、总量 ≤100 条；被动产出超预算时按排序信号（phase1 排序信号节）取前 100 探测，其余标「未探测」保留清单——只加不减），每主机 ≤2 请求（补测 8080/8443 备用端口时上限 ≤4）、并发 ≤5；不做端口扫描；NXDOMAIN 子域保留；CNAME 指向已注销云服务的记接管嫌疑，不注册资源验证。
 
@@ -77,6 +77,7 @@ description: 授权范围内 Web 攻击面的只读测绘（全程只发 GET/HEA
 | `scripts/hook_inject.js` | 运行时请求捕获 |
 | `scripts/scan_comments.py` | 注释线索扫描（凭据/内网地址/旧接口） |
 | `scripts/mine_responses.py` | 响应体挖掘（零请求，高危标记） |
+| `scripts/phase1_probe.py` | DNS+HTTP 存活探测（预算守卫内建） |
 | `scripts/yakit_db_probe.py` | Yakit 流量复盘 |
 
 依赖：Python 3.8+（仅标准库）；`hook_inject.js` 无依赖。

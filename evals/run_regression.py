@@ -683,6 +683,64 @@ def test_safe_fetch_contract(tmp):
         srv.shutdown()
 
 
+def test_mine_responses(tmp):
+    print("\n[F] mine_responses —— 响应体挖掘（零请求 + 待批准门控）")
+    import csv as _csv
+
+    d = os.path.join(tmp, "f1")
+    shutil.rmtree(d, ignore_errors=True)
+    os.makedirs(d)
+    # 五模式 fixture
+    open(os.path.join(d, "a.body"), "w", encoding="utf-8").write(
+        '{"path":"/api/echo/path"}')                                      # error_echo
+    open(os.path.join(d, "b.body"), "w", encoding="utf-8").write(
+        '{"links":{"next":"/api/hateoas/next","related":"/api/hateoas/rel"}}')  # hateoas
+    open(os.path.join(d, "c.body"), "w", encoding="utf-8").write(
+        '{"upload_url":"/api/upload/here","safe_url":"/api/safe/one"}')  # url_field
+    open(os.path.join(d, "d.body"), "w", encoding="utf-8").write(
+        '{"data":"/api/path/value","other":"not a path"}')               # path_value
+    open(os.path.join(d, "e.body"), "w", encoding="utf-8").write(
+        '{"ref":"/users/123/orders"}')                                   # nested_uri
+    # 危险词 fixture
+    open(os.path.join(d, "f.body"), "w", encoding="utf-8").write(
+        '{"x":"/api/export/run","y":"/api/delete/it","z":"/api/info/list"}')
+
+    csvp = os.path.join(d, "mined.csv")
+    run("mine_responses.py", "--dir", d, "--csv", csvp, "--log", os.path.join(d, "r.txt"))
+    rpt = open(os.path.join(d, "r.txt"), encoding="utf-8").read()
+    rows = list(_csv.DictReader(open(csvp, encoding="utf-8-sig")))
+
+    paths = {r["接口路径"] for r in rows}
+    check("F", "五模式正向命中",
+          ("/api/echo/path" in paths and "/api/hateoas/next" in paths
+           and "/api/upload/here" in paths and "/api/path/value" in paths
+           and "/users/{id}/orders" in paths), True)
+    check("F", "危险词标记", 
+          any(r["风险"] == "⚠高危" for r in rows if r["接口路径"] == "/api/export/run")
+          and any(r["风险"] == "⚠高危" for r in rows if r["接口路径"] == "/api/delete/it")
+          and any(not r["风险"] for r in rows if r["接口路径"] == "/api/info/list"), True)
+    check("F", "全部条目状态=待批准",
+          all(r["状态"] == "待批准" for r in rows), True)
+    check("F", "报告含'不自动进入验证'警告",
+          "不自动进入验证" in rpt or "须用户点名" in rpt, True)
+    check("F", "报告含高危汇总区",
+          "高危条目" in rpt, True)
+
+    # 去重：先造一份入口清单，再跑一次确认不重复入
+    entry_csv = os.path.join(d, "entry.csv")
+    with open(entry_csv, "w", encoding="utf-8-sig", newline="") as f:
+        w = _csv.DictWriter(f, fieldnames=["URL", "方法", "参数", "来源", "状态", "验证结果", "备注"])
+        w.writeheader()
+        w.writerow({"URL": "/api/echo/path", "方法": "GET", "参数": "", "来源": "JS提取",
+                    "状态": "已验证", "验证结果": "需凭据", "备注": ""})
+    csvp2 = os.path.join(d, "mined2.csv")
+    run("mine_responses.py", "--dir", d, "--entry-list", entry_csv,
+        "--csv", csvp2, "--log", os.path.join(d, "r2.txt"))
+    rows2 = list(_csv.DictReader(open(csvp2, encoding="utf-8-sig")))
+    check("F", "已有条目去重（不重复发现）",
+          "/api/echo/path" not in {r["接口路径"] for r in rows2}, True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--keep", action="store_true", help="保留临时目录")
@@ -699,6 +757,9 @@ def main():
     finally:
         if not args.keep:
             shutil.rmtree(tmp, ignore_errors=True)
+
+    # ================================================================ F. 响应体挖掘
+    test_mine_responses(tmp)
 
     # 文档一致性静态检查（P3 族漂移的机械防线）：作为闸门最后一项——
     # 跨文件引用失效/词表多处定义/数字复制/形态映射缺项都会让回归变红

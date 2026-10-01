@@ -157,6 +157,14 @@ def main():
     check("内容嗅探前缀两脚本一致（含 <head>）", len(uniq) == 1 and "<head" in next(iter(uniq)),
           str(uniq))
 
+    # 9. mine_responses 的来源标记必须在 delivery 映射行里
+    mine_src = read("scripts/mine_responses.py") if os.path.isfile(
+        os.path.join(ROOT, "scripts", "mine_responses.py")) else ""
+    if mine_src:
+        check("mine_responses 来源标记在 delivery 映射中",
+              "响应体提取" in texts["references/delivery.md"],
+              "delivery.md 映射行缺「响应体提取」")
+
     # 9. API_PREFIX 单一出处：定义仅在 extract_endpoints，其余只 import
     defs = [f for f in ALL_FILES if f.startswith("scripts/")
             and re.search(r"API_PREFIX\s*=", read(f))

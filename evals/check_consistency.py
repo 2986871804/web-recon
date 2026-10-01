@@ -106,7 +106,7 @@ def main():
     # 4. 词表枚举单一出处：四组权威枚举串只许出现在 delivery.md 且各一次
     enums = [
         "存活 / 不存活 / NXDOMAIN / 未探测",
-        "未验证 / 已验证 / 未确认",
+        "未验证 / 待批准 / 已验证 / 未确认",
         "未鉴权可读 / 需凭据 / 不在此前缀",
         "OK / TRUNCATED / CL_MISSING / CHUNKED / FAILED",
     ]

@@ -28,7 +28,7 @@ description: 授权范围内 Web 攻击面的只读测绘（全程只发 GET/HEA
 
 越接近业务路径，封禁风险越高，阶段速率参数越紧。
 
-数据流（松耦合——各阶段独立可执行，产出文件是阶段间唯一接口）：阶段 1 建 `subdomains.csv` 并**向用户汇报后结束**（agent 不自行进入阶段 2）；阶段 2 读 `subdomains.csv`（按优先级覆盖存活站点，CDN/静态/邮件默认不做；覆盖数 M/N 与未覆盖原因入报告），产出 `入口清单.csv` + 指纹表 + 泄露点清单；阶段 3 读 `入口清单.csv`，更新状态与验证结果列；交付时从入口清单导出报告与未闭环清单。**用户可以只跑阶段 1 然后停，也可以直接给域名跳过阶段 1 进阶段 2——`subdomains.csv` 是接口不是门槛。**
+数据流（松耦合，两个技能协作）：**web-recon** 阶段 1 建 `subdomains.csv` 并向用户汇报后结束 → **api-extract** 技能读 subdomains.csv（或直接给 URL/文件目录/apk），产出 `入口清单.csv` + 指纹表 + 泄露点清单 → **web-recon** 阶段 3 读 `入口清单.csv` 更新状态与验证结果。两个技能可独立使用：web-recon 只做"找资产+验接口"（网络动作），api-extract 只做"提取接口+挖敏感信息"（离线分析或仅下载静态资源）。
 
 ### 阶段 1：资产发现（独立执行，结束后向用户汇报）
 
@@ -42,13 +42,12 @@ description: 授权范围内 Web 攻击面的只读测绘（全程只发 GET/HEA
 
 **阶段 1 结束动作：向用户汇报（存活数/总数、覆盖摘要、接管嫌疑数、未探测数），然后停下等用户决定是否进阶段 2——不自行继续。**
 
-### 阶段 2：内容测绘（独立执行，输入 = subdomains.csv 或用户直接指定域名）
+### 阶段 2：内容提取 → 使用 api-extract 技能
 
-步骤：① 抓首页，存响应头与正文 → ② 指纹：本地响应集与 GitHub 指纹规则库离线比对（响应头/Cookie/HTML/JS 路径 → 组件名+版本串）→ ③ `scripts/safe_fetch.py` 下载全部 JS，校验 `实收字节 == Content-Length`（chunked 传输无 CL → CHUNKED 判定：可提取、标注不可校验；完整判定词表见 delivery §0），不符重下 → ④ 静态提取：`extract_apis.py` 粗筛 → `extract_endpoints.py --hidden` 精提 → 高价值条目取上下文 ±150 字符核验 → ⑤ 有浏览器时加运行时提取：`hook_inject.js` 捕获实际调用，SPA 站读路由表找隐藏页面 → ⑥ API 基址从 `baseURL` / 配置常量模块读，不猜 → ⑦ 本地敏感信息 grep（密钥、内网 IP、签名函数，零请求）→ ⑧ 源码与文档侦察（GitHub org / 协作文档检索，零目标流量，性质同阶段 1 被动源）→ ⑨ 移动端静态提取（站点直链 apk / 用户给的 ipa：解包 + strings grep，零目标流量，见 references §8）。
+本技能不内置阶段 2——内容提取（指纹、JS 接口提取、敏感信息挖掘、移动端分析）由独立技能 **api-extract** 承担。两种用法：
 
-阶段规则：请求限于页面与静态资源，等价正常浏览；同主机并发 ≤5，其中 JS 下载并发 ≤2、每批 ≤10 个请求（约 10 个文件）、批间 ≥1 秒，截断由 safe_fetch 自动重试（≤6 次），仍不完整的换窗口重试，不得基于残缺文件提取；JS 中读到的域外接口记录不请求；高危与泄露路径探测每主机总量 ≤50 发、每批 ≤10、批间 ≥1 秒，403 / 404 也记录——403 = 存在被拦，是信号。
-
-产出：指纹表、`入口清单.csv` 新增条目、泄露点清单。
+- **顺序模式**：阶段 1 产 subdomains.csv → 用户批准 → 调用 api-extract → 产入口清单.csv → 进入阶段 3
+- **独立模式**：用户直接给 URL/JS 目录/apk → 只跑 api-extract，不经过 web-recon
 
 ### 阶段 3：API 验证（独立执行，输入 = 入口清单.csv 或用户直接指定接口列表）
 
@@ -73,14 +72,10 @@ description: 授权范围内 Web 攻击面的只读测绘（全程只发 GET/HEA
 
 | 脚本 | 用途 |
 |---|---|
-| `scripts/safe_fetch.py` | JS 下载器（校验与重试） |
-| `scripts/extract_apis.py` | 接口粗筛 |
-| `scripts/extract_endpoints.py` | 接口精提（`--hidden`） |
-| `scripts/hook_inject.js` | 运行时请求捕获 |
-| `scripts/scan_comments.py` | 注释线索扫描（凭据/内网地址/旧接口） |
-| `scripts/mine_responses.py` | 响应体挖掘（零请求，高危标记） |
 | `scripts/phase1_probe.py` | DNS+HTTP 存活探测（预算守卫内建） |
 | `scripts/yakit_db_probe.py` | Yakit 流量复盘 |
+
+提取类脚本（safe_fetch / extract_apis / extract_endpoints / scan_comments / mine_responses / hook_inject）已迁移至 **api-extract** 技能。
 
 依赖：Python 3.8+（仅标准库）；`hook_inject.js` 无依赖。
 
